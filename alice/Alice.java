@@ -17,6 +17,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SealedObject;
 import java.net.*;
+import java.io.*;
 
 /************************************************
   * This skeleton program is prepared for weak  *
@@ -71,9 +72,8 @@ class Alice {  // Alice is a TCP client
             InetAddress address = InetAddress.getByName(this.bobIP);
             this.connectionSkt = new Socket(address, this.bobPort);
 
-            Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-            cipher.init(Cipher.ENCRYPT_MODE, this.crypto.pubKey);
-            SealedObject encryptedSessionKey = new SealedObject(this.crypto.sessionKey.getEncoded(), cipher);
+
+            SealedObject encryptedSessionKey = this.crypto.getSessionKey();
 
             toBob = new ObjectOutputStream(this.connectionSkt.getOutputStream());
             toBob.writeObject(encryptedSessionKey);
@@ -88,19 +88,25 @@ class Alice {  // Alice is a TCP client
     
     // Receive messages one by one from Bob, decrypt and write to file
     public void receiveMessages() {
+        PrintWriter pw = null;
         try{
             fromBob = new ObjectInputStream(this.connectionSkt.getInputStream());
+            pw = new PrintWriter("msgs.txt");
             for (int i = 0; i < 10; i++) {
                 SealedObject messageFromBob = (SealedObject)this.fromBob.readObject();
-                Cipher bobCipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-                bobCipher.init(Cipher.DECRYPT_MODE, this.crypto.sessionKey);
-                String message = (String)messageFromBob.getObject(bobCipher);
-                System.out.println(message + "\n");
+                String message = this.crypto.decryptMsg(messageFromBob);
+                pw.println(message);
+                pw.flush();
             }
         } catch(Exception ioe) {
             System.out.println("Error receiving messages from Bob");
             System.exit(1);
-        } 
+        } finally {
+            if (pw != null){
+                
+                pw.close();
+            }
+        }
     }
     
     /*****************/
@@ -159,7 +165,14 @@ class Alice {  // Alice is a TCP client
             
             // Alice must use the same RSA key/transformation as Bob specified
             //Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-            return null;
+            try{
+                Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+                cipher.init(Cipher.ENCRYPT_MODE, this.pubKey);
+                SealedObject encryptedSessionKey = new SealedObject(this.sessionKey.getEncoded(), cipher);
+                return encryptedSessionKey;
+            } catch(Exception e){
+                return null;
+            }
             // RSA imposes size restriction on the object being encrypted (117 bytes).
             // Instead of sealing a Key object which is way over the size restriction,
             // we shall encrypt AES key in its byte format (using getEncoded() method).           
@@ -167,14 +180,17 @@ class Alice {  // Alice is a TCP client
         
         // Decrypt and extract a message from SealedObject
         public String decryptMsg(SealedObject encryptedMsgObj) {
+            try{
+                Cipher bobCipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+                bobCipher.init(Cipher.DECRYPT_MODE, this.sessionKey);
+                String plainText = (String)encryptedMsgObj.getObject(bobCipher);
+                return plainText;
+                // Alice and Bob use the same AES key/transformation
+                //Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+            } catch(Exception e){
+                return null;
+            }
             
-            String plainText = null;
-            
-            // Alice and Bob use the same AES key/transformation
-            //Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-            
-            
-            return plainText;
         }
     }
 }
