@@ -95,7 +95,9 @@ class Alice {  // Alice is a TCP client
             for (int i = 0; i < 10; i++) {
                 SealedObject messageFromBob = (SealedObject)this.fromBob.readObject();
                 String message = this.crypto.decryptMsg(messageFromBob);
-                pw.println(message);
+                pw.print(message);
+                pw.write('\r');
+                pw.write('\n');
                 pw.flush();
             }
         } catch(Exception ioe) {
@@ -103,7 +105,6 @@ class Alice {  // Alice is a TCP client
             System.exit(1);
         } finally {
             if (pw != null){
-                
                 pw.close();
             }
         }
