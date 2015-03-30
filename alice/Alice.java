@@ -16,6 +16,7 @@ import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SealedObject;
+import java.net.*;
 
 /************************************************
   * This skeleton program is prepared for weak  *
@@ -54,7 +55,8 @@ class Alice {  // Alice is a TCP client
     public Alice(String ipStr, String portStr) {
         
         this.crypto = new Crypto();
-        
+        this.bobIP = ipStr;
+        this.bobPort = Integer.parseInt(portStr);
         // Send session key to Bob
         sendSessionKey();
         
@@ -66,17 +68,39 @@ class Alice {  // Alice is a TCP client
     // Send session key to Bob
     public void sendSessionKey() {
         try{
+            InetAddress address = InetAddress.getByName(this.bobIP);
+            this.connectionSkt = new Socket(address, this.bobPort);
+
             Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
             cipher.init(Cipher.ENCRYPT_MODE, this.crypto.pubKey);
+            SealedObject encryptedSessionKey = new SealedObject(this.crypto.sessionKey.getEncoded(), cipher);
+
+            toBob = new ObjectOutputStream(this.connectionSkt.getOutputStream());
+            toBob.writeObject(encryptedSessionKey);
+            toBob.flush();
+
+            System.out.println("AES key sent.");
+
         } catch(Exception e){
-            
+            System.out.println("Error: AES key not sent.");
         }
-        //key = cipher.doFinal(skey.getEncoded());
     }
     
     // Receive messages one by one from Bob, decrypt and write to file
     public void receiveMessages() {
-        
+        try{
+            fromBob = new ObjectInputStream(this.connectionSkt.getInputStream());
+            for (int i = 0; i < 10; i++) {
+                SealedObject messageFromBob = (SealedObject)this.fromBob.readObject();
+                Cipher bobCipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+                bobCipher.init(Cipher.DECRYPT_MODE, this.crypto.sessionKey);
+                String message = (String)messageFromBob.getObject(bobCipher);
+                System.out.println(message + "\n");
+            }
+        } catch(Exception ioe) {
+            System.out.println("Error receiving messages from Bob");
+            System.exit(1);
+        } 
     }
     
     /*****************/
@@ -125,7 +149,6 @@ class Alice {  // Alice is a TCP client
                 KeyGenerator generator = KeyGenerator.getInstance("AES");
                 generator.init(128);
                 this.sessionKey = generator.generateKey();
-                System.out.println(this.sessionKey);
             }catch(Exception e){    
                  System.out.println("Exception thrown, error initializing session key");       
             }
